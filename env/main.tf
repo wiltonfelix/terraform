@@ -4,16 +4,18 @@ provider "aws" {
 
 
 module "vpc-us-east-1" {
-  source              = "../../modules/vpc"
-  vpc_name            = "${var.vpc_name}"
-  vpc_cidr            = "${var.vpc_cidr}"
-  region              = "${var.region}"
-  public_subnet_cidr  = "${var.public_subnet_cidr}"
-  private_subnet_cidr = "${var.private_subnet_cidr}"
+  source    = "../modules/vpc"
+  vpc_name  = "${var.vpc_name}"
+  vpc_cidr  = "${var.vpc_cidr}"
+  region    = "${var.region}"
+  subnets   = {
+    private = 1
+    public  = 1
+  }
 }
 
-module "segurity-us-east-1" {
-  source    = "../../modules/security-group-all"
+module "security-us-east-1" {
+  source    = "../modules/security-group-all"
   vpc_id    = "${module.vpc-us-east-1.vpc_id}"
   protocol  = "${var.protocol}"
   from_port = "${var.from_port}"
@@ -25,7 +27,7 @@ module "segurity-us-east-1" {
 
 
  module "key-aws" {
-   source                = "../../modules/key-pair"
+   source                = "../modules/key-pair"
    region                = "${var.region}"
    ssh_public_key_path   = "${var.ssh_public_key_path}"
    generate_ssh_key      = "${var.generate_ssh_key}"

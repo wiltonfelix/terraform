@@ -14,6 +14,22 @@ resource "aws_vpc" "default" {
   }
 }
 
+resource "aws_subnet" "private" {
+  count             = "${var.subnets["private"]}"
+  vpc_id            = "${aws_vpc.default.id}"
+  cidr_block        = "${cidrsubnet(aws_vpc.default.cidr_block, 8, count.index)}"
+  availability_zone = "${element(data.aws_availability_zones.default.names,
+    (count.index % length(data.aws_availability_zones.default.names)))}"
+
+  tags {
+    Name = "${format("%v-private-%02d", var.vpc_name, count.index+1)}"
+  }
+
+  lifecycle {
+    create_before_destroy = false
+  }
+}
+
 resource "aws_internet_gateway" "default" {
   vpc_id = "${aws_vpc.default.id}"
 
@@ -22,6 +38,26 @@ resource "aws_internet_gateway" "default" {
   }
 
   depends_on = ["aws_vpc.default"]
+}
+
+resource "aws_subnet" "public" {
+  count                   = "${var.subnets["public"]}"
+  vpc_id                  = "${aws_vpc.default.id}"
+  cidr_block              = "${cidrsubnet(aws_vpc.default.cidr_block, 8, 
+    count.index + var.subnets["private"])}"
+  map_public_ip_on_launch = true
+  availability_zone       = "${element(data.aws_availability_zones.default.names,
+    (count.index % length(data.aws_availability_zones.default.names)))}"
+
+  depends_on = ["aws_internet_gateway.default"]
+
+  tags {
+    Name = "${format("%v-public-%02d", var.vpc_name, count.index+1)}"
+  }
+
+  lifecycle {
+    create_before_destroy = false
+  }
 }
 
 resource "aws_eip" "nat_gateway_eip" {
@@ -44,49 +80,16 @@ resource "aws_route_table" "public" {
   }
 }
 
-resource "aws_subnet" "public_subnet" {
-  vpc_id            = "${aws_vpc.default.id}"
-  cidr_block        = "${element(split(",", var.public_subnet_cidr), count.index)}"
-  availability_zone = "${element(data.aws_availability_zones.default.names, count.index)}"
-  count             = "${length(split(",", var.public_subnet_cidr))}"
-  depends_on        = ["aws_internet_gateway.default"]
-
-  tags {
-    Name = "public-subnet-${element(data.aws_availability_zones.default.names, count.index)}"
-  }
-
-  lifecycle {
-    create_before_destroy = false
-  }
-
-  map_public_ip_on_launch = true
-}
-
 resource "aws_route_table_association" "public" {
-  count          = "${length(split(",", var.public_subnet_cidr))}"
-  subnet_id      = "${element(aws_subnet.public_subnet.*.id, count.index)}"
+  count             = "${var.subnets["public"]}"
+  subnet_id      = "${element(aws_subnet.public.*.id, count.index)}"
   route_table_id = "${aws_route_table.public.id}"
 }
 
 resource "aws_nat_gateway" "nat_gateway" {
   allocation_id = "${aws_eip.nat_gateway_eip.id}"
-  subnet_id     = "${aws_subnet.public_subnet.*.id[0]}"
-  depends_on    = ["aws_internet_gateway.default", "aws_subnet.public_subnet"]
-}
-
-resource "aws_subnet" "private_subnet" {
-  vpc_id            = "${aws_vpc.default.id}"
-  cidr_block        = "${element(split(",", var.private_subnet_cidr), count.index)}"
-  availability_zone = "${element(data.aws_availability_zones.default.names, count.index)}"
-  count             = "${length(split(",", var.private_subnet_cidr))}"
-
-  tags {
-    Name = "private-subnet-${element(data.aws_availability_zones.default.names, count.index)}"
-  }
-
-  lifecycle {
-    create_before_destroy = false
-  }
+  subnet_id     = "${element(aws_subnet.public.*.id, 0)}"
+  depends_on    = ["aws_internet_gateway.default", "aws_subnet.public"]
 }
 
 resource "aws_route_table" "private" {
@@ -109,8 +112,8 @@ resource "aws_route_table" "private" {
 }
 
 resource "aws_route_table_association" "private" {
-  count          = "${length(split(",", var.private_subnet_cidr))}"
-  subnet_id      = "${element(aws_subnet.private_subnet.*.id, count.index)}"
+  count             = "${var.subnets["private"]}"
+  subnet_id      = "${element(aws_subnet.private.*.id, count.index)}"
   route_table_id = "${aws_route_table.private.id}"
 
   lifecycle {
