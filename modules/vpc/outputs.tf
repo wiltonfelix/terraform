@@ -7,9 +7,9 @@ output "vpc_range" {
 }
 
 output "subnet_public_ids" {
-  value = "${join(",", aws_subnet.public_subnet.*.id)}"
+  value = "${join(",", aws_subnet.public.*.id)}"
 }
 
 output "subnet_private_ids" {
-  value = "${join(",", aws_subnet.private_subnet.*.id)}"
+  value = "${join(",", aws_subnet.private.*.id)}"
 }
